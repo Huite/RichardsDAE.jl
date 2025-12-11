@@ -1,9 +1,16 @@
 function residual!(rhs, state::RichardsState, parameters::ReducedDAEParameters, Δt)
-    waterbalance!(state.∇q, state.ψ, parameters)
+    waterbalance!(state.∇q, state.u, parameters)
     Δz = parameters.Δz
+    bdf = state.bdf
     for i = 1:parameters.n
-        θ = moisture_content(state.ψ[i], parameters.constitutive[i])
-        rhs[i] = -(state.∇q[i] - Δz * (θ - state.θ_old[i]) / Δt)
+        θ = moisture_content(state.u[i], parameters.constitutive[i])
+        θ_bdf = bdf.a[1] * θ
+        for j = 1:bdf.order
+            ψ_prev = bdf.u_prev[j, i]
+            θ_prev = moisture_content(ψ_prev, parameters.constitutive[i])
+            θ_bdf += bdf.a[j+1] * θ_prev
+        end
+        rhs[i] = -(state.∇q[i] - Δz * θ_bdf)
     end
     return
 end
@@ -16,14 +23,15 @@ end
     Use Δt = ∞ for steady-state simulations.
 """
 function jacobian!(J, state, parameters::ReducedDAEParameters, Δt)
-    dwaterbalance!(J, state.ψ, parameters)
+    dwaterbalance!(J, state.u, parameters)
     Δz = parameters.Δz
+    a1 = state.bdf.a[1]
     for i = 1:parameters.n
-        C = specific_moisture_capacity(state.ψ[i], parameters.constitutive[i])
-        #Sa = aqueous_saturation(state.ψ[i], parameters.constitutive[i])
+        C = specific_moisture_capacity(state.u[i], parameters.constitutive[i])
+        #Sa = aqueous_saturation(state.u[i], parameters.constitutive[i])
         #Ss = parameters.constitutive[i].Ss
         #J.d[i] -= (Δz * (C + Sa * Ss)) / Δt
-        J.d[i] -= (Δz * C) / Δt
+        J.d[i] -= (Δz * C) * a1
     end
     return
 end

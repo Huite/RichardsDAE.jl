@@ -2,57 +2,54 @@ function compute_savedflows!(state, parameters::RichardsParameters, Δt)
     ψ = primary(state)
     state.flows[1] += Δt * bottomflux(ψ, parameters, parameters.bottomboundary)
     state.flows[2] +=
-        Δt * (
-            topflux(ψ, parameters, parameters.topboundary) +
-            forcingflux(ψ, parameters)
-        )
+        Δt * (topflux(ψ, parameters, parameters.topboundary) + forcingflux(ψ, parameters))
     return
 end
 
 struct RichardsState <: State
-    ψ::Vector{Float64}
-    ψ_old::Vector{Float64}
-    θ_old::Vector{Float64}
+    u::Vector{Float64}
+    bdf::BDFWorkSpace
     ∇q::Vector{Float64}
     flows::Vector{Float64}
 end
 
 """Return the primary state."""
 function primary(state::RichardsState)
-    return state.ψ
+    return state.u
 end
 
 
 function prepare_state(p::RichardsParameters, initial)
+    bdf = BDFWorkSpace(p)
+    bdf.u_prev[1, :] .= initial
     return RichardsState(
         copy(initial),  # ψ
-        copy(initial),  # ψ_old,
-        zero(initial),
+        bdf,
         zero(initial),
         zeros(2),  # qbottom, qtop
     )
 end
 
 function apply_update!(state::RichardsState, linearsolver, a)
-    @. state.ψ += a * linearsolver.ϕ
+    @. state.u += a * linearsolver.ϕ
     return
 end
 
 function copy_state!(state::RichardsState, parameters::RichardsParameters)
-    copyto!(state.ψ_old, state.ψ)
-    state.θ_old .= moisture_content.(state.ψ_old, parameters.constitutive)
+    copyto!(state.bdf.u_prev[:, 1], state.u)
     return
 end
 
 function rewind!(state::RichardsState)
-    copyto!(state.ψ, state.ψ_old)
+    copyto!(state.u, state.bdf.u_prev[:, 1])
+    return
 end
 
 # DAE form
 
 struct RichardsDAEState <: State
     u::Vector{Float64}
-    u_old::Vector{Float64}
+    bdf::BDFWorkSpace
     ∇q::Vector{Float64}
     flows::Vector{Float64}
     fluxJ::Tridiagonal{Float64,Vector{Float64}}
@@ -68,9 +65,12 @@ end
 function prepare_state(p::MixedDAEParameters, initial)
     n = p.n
     θ = [moisture_content(ψ, p.constitutive[i]) for (i, ψ) in enumerate(initial)]
+    bdf = BDFWorkSpace(p)
+    bdf.u_prev[1, 1:n] .= initial
+    bdf.u_prev[1, (n+1):end] .= θ
     return RichardsDAEState(
         [copy(initial); θ],  # [ψ, θ]
-        [copy(initial); copy(θ)],  # [ψ_old, θ_old]
+        bdf,
         zero(initial),  # ∇q
         zeros(2),  # qbottom, qtop
         Tridiagonal(zeros(n-1), zeros(n), zeros(n-1)),
@@ -88,7 +88,7 @@ function copy_state!(state::RichardsDAEState, parameters)
 end
 
 function rewind!(state::RichardsDAEState)
-    copyto!(state.u, state.u_old)
+    copyto!(state.u, state.bdf.u_prev[1, :])
 end
 
 # Initial states

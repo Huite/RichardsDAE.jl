@@ -2,25 +2,32 @@ function residual!(rhs, state::RichardsDAEState, parameters::MixedDAEParameters,
     n = parameters.n
     Δz = parameters.Δz
     ψ = @view state.u[1:n]
-    θ = @view state.u[(n+1):2*n]
-    θ_old = @view state.u_old[(n+1):2*n]
+    θ = @view state.u[(n+1):(2*n)]
+    bdf = state.bdf
 
     ∇q = state.∇q
     waterbalance!(∇q, ψ, parameters)
     for i = 1:n
-        # -R1: differential residual
-        rhs[i] = -(∇q[i] - Δz * (θ[i] - θ_old[i]) / Δt)
+        # -R1: differential residual (BDF on θ)
+        θ_bdf = bdf.a[1] * θ[i]
+        for j = 1:bdf.order
+            θ_bdf += bdf.a[j+1] * bdf.u_prev[j, n+i]
+        end
+        rhs[i] = -(∇q[i] - Δz * θ_bdf)
+
         # -R2: algebraic residual
         rhs[n+i] = -(θ[i] - moisture_content(ψ[i], parameters.constitutive[i]))
     end
     return
 end
 
+
 function jacobian!(J, state::RichardsDAEState, parameters::MixedDAEParameters, Δt)
     n = parameters.n
     Δz = parameters.Δz
     ψ = @view state.u[1:n]
     fluxJ = state.fluxJ
+    a1 = state.bdf.a[1]
 
     dwaterbalance!(fluxJ, ψ, parameters)
     fill!(J.nzval, 0.0)
@@ -35,10 +42,9 @@ function jacobian!(J, state::RichardsDAEState, parameters::MixedDAEParameters, �
         end
     end
 
-    # top-right block: ∂F₁/∂θ = -(Δz/Δt)I
-    ΔzΔt⁻¹ = Δz / Δt
+    # top-right block: ∂F₁/∂θ = -Δz * a1
     for i = 1:n
-        J[i, n+i] = -ΔzΔt⁻¹
+        J[i, n+i] = -Δz * a1
     end
 
     # bottom blocks: ∂F₂/∂ψ = -C*, ∂F₂/∂θ = I

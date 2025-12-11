@@ -46,7 +46,7 @@ end
 function waterbalance_dataframe(model)
     # Compute cumulative flows back to reporting steps.
     # One smaller (vertex vs interval): no cumulative yet flow at t=0.
-    parameters = get_parameters(model)
+    parameters = (model.parameters)
     n = parameters.n
     S = [storage(ψ, parameters) for ψ in eachcol(model.saved[1:n, :])]
     return DataFrame(

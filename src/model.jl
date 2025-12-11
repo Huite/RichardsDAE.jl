@@ -99,6 +99,7 @@ function reset_and_run!(model::Model, initial)
     # Set initial state
     primary_state = primary(model.state)
     copyto!(primary_state, initial)
+    # TODO: reset BDFWorkSpace
     run!(model)
     return
 end
@@ -127,21 +128,18 @@ First order implicit (Euler Backward) time integration, with optional:
 * Line searches or backtracking
 """
 function timestep!(model::Model, Δt)
-    copy_state!(model.state, model.parameters)
+    state = model.state
+    set_bdf_coefficients!(state.bdf, Δt)
     converged, n_iter = nonlinearsolve!(model.solver, model.state, model.parameters, Δt)
-
     while !converged
         Δt = compute_timestep_size(model.timestepper, Δt, converged, n_iter)
-        rewind!(model.state)
+        rewind!(state)
+        set_bdf_coefficients!(bdf, Δt)  # recompute for new Δt
         converged, n_iter = nonlinearsolve!(model.solver, model.state, model.parameters, Δt)
     end
-
+    rotate_history!(state.bdf, state.u, Δt)
     # Compute the flows based on the current solution
     compute_savedflows!(model.state, model.parameters, Δt)
-
-    # After convergence, compute the recommended next step size based on solver performance?
-    #    Δt_next = compute_next_time_step(model.timestepper, Δt, converged, n_newton_iter)
-    #    return Δt, Δt_next
     return Δt
 end
 
@@ -154,7 +152,6 @@ function nonlinearsolve!(nonlinearsolver, state, parameters, Δt)
         end
         jacobian!(nonlinearsolver.linearsolver.J, state, parameters, Δt)
         linearsolve!(nonlinearsolver.linearsolver)
-        @show i, nonlinearsolver.linearsolver.ϕ
         relaxed_update!(
             nonlinearsolver.relax,
             nonlinearsolver.linearsolver,

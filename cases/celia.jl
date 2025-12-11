@@ -1,7 +1,7 @@
 import RichardsDAE as RD
 using Plots
 
-function create_celia()
+function create_celia(formulation)
     # Note: units are centimeters and seconds!
     soil = RD.Haverkamp(
         a = 1.611e6,
@@ -14,14 +14,12 @@ function create_celia()
         Ss = 0.0,
     )
     celia = RD.Case(
-        #formulation=RD.HeadBasedBDF1(),
-        #formulation = RD.ReducedBDF1(),
-        formulation = RD.DAEMixedBDF1(),
+        formulation = formulation,
         soil = soil,
         Δz = 1.0,
         Δztotal = 40.0,
         tend = 360.0,
-        dt = 1.0,
+        dt = 120.0,
         ψ0 = RD.InitialConstant(-61.5),
         bottomboundary = RD.HeadBoundary(-61.5, soil),
         topboundary = RD.HeadBoundary(-20.5, soil),
@@ -30,23 +28,46 @@ function create_celia()
     return celia
 end
 
-celia = create_celia()
-solver = RD.NewtonSolver(
-    RD.LinearSolverLU(celia.parameters),
-    relax = RD.ScalarRelaxation(0.0),
-    maxiter=100,
-    abstol = 1e-8,
-    reltol = 1e-8,
-)
-timestepper = RD.FixedTimeStepper(1.0)
-#timestepper = RD.AdaptiveTimeStepper(Δt0=1.0)
-model = RD.Model(celia.parameters, celia.ψ0, solver, celia.tspan, celia.saveat, timestepper)
-RD.run!(model)
+function run(formulations)
+    models = []
+    for formulation in formulations
+        case = create_celia(formulation)
+        # Solver is formulation dependent: DAE Jacobian is larger.
+        solver = RD.NewtonSolver(
+            RD.LinearSolverLU(case.parameters),
+            relax = RD.ScalarRelaxation(0.0),
+            maxiter = 100,
+            abstol = 1e-8,
+            reltol = 1e-8,
+        )
+        timestepper = RD.FixedTimeStepper(120.0)
+        model =
+            RD.Model(case.parameters, case.ψ0, solver, case.tspan, case.saveat, timestepper)
+        RD.run!(model)
+        push!(models, model)
+    end
+    return models
+end
 
-plot!(model.saved[:, end])
+models = run((
+    RD.HeadBasedBDF1(),
+    RD.DAEMixedBDF1(),
+    RD.ReducedBDF1(),
+    #    RD.ReducedBDF2(),
+))
 
-J = Matrix(model.solver.linearsolver.J)
-cond(J)
+plot(models[1].saved[:, end])
+plot!(models[2].saved[:, end])
+plot!(models[3].saved[:, end])
 
-# DAE cond: 1415
-# Reduced cond: 3.75
+df1 = RD.waterbalance_dataframe(models[1])
+df2 = RD.waterbalance_dataframe(models[2])
+df3 = RD.waterbalance_dataframe(models[3])
+
+mb1 = RD.massbalance_bias(df1)
+mb2 = RD.massbalance_bias(df2)
+mb3 = RD.massbalance_bias(df3)
+
+mbrmse1 = RD.massbalance_rmse(df1)
+mbrmse2 = RD.massbalance_rmse(df2)
+mbrmse3 = RD.massbalance_rmse(df3)
