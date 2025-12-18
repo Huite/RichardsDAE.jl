@@ -28,10 +28,10 @@ function jacobian!(J, state, parameters::ReducedDAEParameters, Δt)
     a1 = state.bdf.a[1]
     for i = 1:parameters.n
         C = specific_moisture_capacity(state.u[i], parameters.constitutive[i])
-        #Sa = aqueous_saturation(state.u[i], parameters.constitutive[i])
-        #Ss = parameters.constitutive[i].Ss
-        #J.d[i] -= (Δz * (C + Sa * Ss)) / Δt
-        J.d[i] -= (Δz * C) * a1
+        Sa = aqueous_saturation(state.u[i], parameters.constitutive[i])
+        Ss = parameters.constitutive[i].Ss
+        J.d[i] -= (Δz * (C + Sa * Ss)) * a1
+        #J.d[i] -= (Δz * C) * a1
     end
     return
 end

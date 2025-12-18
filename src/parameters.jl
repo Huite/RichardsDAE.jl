@@ -1,6 +1,6 @@
-
-struct RichardsParameters{F,C,T,B}
+struct RichardsParameters{F,O,C,T,B}
     formulation::F
+    bdforder::O
     constitutive::Vector{C}
     Δz::Float64
     forcing::MeteorologicalForcing
@@ -10,15 +10,17 @@ struct RichardsParameters{F,C,T,B}
     currentforcing::Vector{Float64}  # P, ET
 
     function RichardsParameters(
-        formulation::F;
+        formulation::F,
+        bdforder::O;
         constitutive::Vector{C},
         Δz,
         forcing,
         bottomboundary::B,
         topboundary::T,
-    ) where {F<:RichardsFormulation,C,T,B}
-        new{F,C,T,B}(
+    ) where {F<:RichardsFormulation,O<:BDF,C,T,B}
+        new{F,O,C,T,B}(
             formulation,
+            bdforder,
             constitutive,
             Δz,
             forcing,
@@ -29,7 +31,6 @@ struct RichardsParameters{F,C,T,B}
         )
     end
 end
-
 
 function Base.show(io::IO, rp::RichardsParameters)
     C = eltype(rp.constitutive)
@@ -54,7 +55,9 @@ function Base.show(io::IO, rp::RichardsParameters)
     )
 end
 
+const MixedDAEParameters{O,C,T,B} = RichardsParameters{MixedDAE,O,C,T,B}
+const HeadBasedParameters{O,C,T,B} = RichardsParameters{HeadBased,O,C,T,B}
+const ReducedDAEParameters{O,C,T,B} = RichardsParameters{ReducedDAE,O,C,T,B}
 
-const MixedDAEParameters{C,T,B} = RichardsParameters{DAEMixedBDF1,C,T,B}
-const HeadBasedParameters{C,T,B} = RichardsParameters{HeadBasedBDF1,C,T,B}
-const ReducedDAEParameters{C,T,B} = RichardsParameters{ReducedBDF1,C,T,B}
+nunknown(p::RichardsParameters) = p.n
+nunknown(p::MixedDAEParameters) = 2 * p.n

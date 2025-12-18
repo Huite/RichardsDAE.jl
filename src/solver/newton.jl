@@ -9,12 +9,16 @@ Requires a state type with the following associated methods:
 
 """
 
-struct NewtonSolver{LS<:LinearSolver,R<:Relaxation}
+mutable struct NewtonSolver{LS<:LinearSolver,R<:Relaxation}
     linearsolver::LS
     relax::R
     maxiter::Int
     abstol::Float64
     reltol::Float64
+    njacobian::Int
+    nresidual::Int
+    nlinsolve::Int
+    maxresidual::Vector{Float64}
 end
 
 function NewtonSolver(
@@ -24,7 +28,7 @@ function NewtonSolver(
     abstol::Float64 = 1e-6,
     reltol::Float64 = 1e-6,
 )
-    return NewtonSolver(linearsolver, relax, maxiter, abstol, reltol)
+    return NewtonSolver(linearsolver, relax, maxiter, abstol, reltol, 0, 0, 0, Float64[])
 end
 
 function Base.show(io::IO, solver::NewtonSolver)
@@ -41,6 +45,8 @@ end
 
 function converged(newton::NewtonSolver, state)
     residual = @view newton.linearsolver.rhs[1:length(state)]
+    minr, maxr = extrema(residual)
+    push!(newton.maxresidual, max(maxr, abs(minr)))
     return all(
         i -> abs(residual[i]) < newton.abstol + newton.reltol * abs(state[i]),
         eachindex(residual),

@@ -7,6 +7,7 @@ end
 
 function Case(;
     formulation,
+    bdf,
     soil,
     Δz,
     Δztotal,
@@ -25,6 +26,7 @@ function Case(;
     return Case(
         RichardsParameters(
             formulation,
+            bdf,
             constitutive = fill(soil, n),
             Δz = Δz,
             forcing = forcing,
@@ -39,8 +41,9 @@ end
 
 function storage(ψ, parameters::RichardsParameters)
     θ = moisture_content.(ψ, parameters.constitutive)
-    S_elastic = [c.Ss * θi / c.θs for (c, θi) in zip(parameters.constitutive, θ)]
-    return parameters.Δz * (θ + S_elastic)
+    #S_elastic = [c.Ss * θi / c.θs for (c, θi) in zip(parameters.constitutive, θ)]
+    #return parameters.Δz * (θ + S_elastic)
+    return parameters.Δz * θ
 end
 
 function waterbalance_dataframe(model)
@@ -69,4 +72,18 @@ function massbalance_rmse(waterbalance)
     qt = diff(waterbalance.qtop)
     error = qt + qb - ΔS
     return sqrt(mean(error .^ 2))
+end
+
+function okabe_ito_colors()
+    # Should be colorblind friendly.
+    return Dict(
+        :orange => "#E69F00",
+        :light_blue => "#56B4E9",
+        :green => "#009E73",
+        :yellow => "#F0E442",
+        :blue => "#0072B2",
+        :dark_orange => "#D55E00",
+        :pink => "#CC79A7",
+        :black => "#000000",
+    )
 end

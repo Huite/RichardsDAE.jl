@@ -20,6 +20,10 @@ struct LinearSolverThomas <: LinearSolver
     end
 end
 
+function LinearSolverThomas(parameters::RichardsParameters)
+    return LinearSolverThomas(parameters.n)
+end
+
 function Base.show(io::IO, solver::LinearSolverThomas)
     print(io, "LinearSolverThomas(n=$(solver.n))")
 end

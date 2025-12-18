@@ -7,8 +7,8 @@ mutable struct BDFWorkSpace
 end
 
 function BDFWorkSpace(parameters::RichardsParameters)
-    n = parameters.n
-    order = max_order(parameters.formulation)
+    n = nunknown(parameters)
+    order = max_order(parameters.bdforder)
     return BDFWorkSpace(
         order,
         zeros(order, n),
@@ -18,17 +18,6 @@ function BDFWorkSpace(parameters::RichardsParameters)
     )
 end
 
-function BDFWorkSpace(parameters::MixedDAEParameters)
-    n = parameters.n
-    order = max_order(parameters.formulation)
-    return BDFWorkSpace(
-        order,
-        zeros(order, n*2),
-        zeros(order),
-        zeros(order + 1),
-        1,  # always initialize with first order
-    )
-end
 
 function set_bdf_coefficients!(bdf::BDFWorkSpace, Δt)
     order = bdf.order

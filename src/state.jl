@@ -1,10 +1,28 @@
 function compute_savedflows!(state, parameters::RichardsParameters, Δt)
     ψ = primary(state)
-    state.flows[1] += Δt * bottomflux(ψ, parameters, parameters.bottomboundary)
-    state.flows[2] +=
-        Δt * (topflux(ψ, parameters, parameters.topboundary) + forcingflux(ψ, parameters))
+    n = parameters.n
+
+    qbot_new = bottomflux(ψ, parameters, parameters.bottomboundary)
+    qtop_new = topflux(ψ, parameters, parameters.topboundary) + forcingflux(ψ, parameters)
+
+    if state.bdf.order == 1
+        state.flows[1] += Δt * qbot_new
+        state.flows[2] += Δt * qtop_new
+    else
+        # Get ψ from previous timestep (first column of history)
+        # Trapezoidal approximation
+        ψ_prev = @view state.bdf.u_prev[1, 1:n]
+        qbot_prev = bottomflux(ψ_prev, parameters, parameters.bottomboundary)
+        qtop_prev =
+            topflux(ψ_prev, parameters, parameters.topboundary) +
+            forcingflux(ψ_prev, parameters)
+
+        state.flows[1] += 0.5 * Δt * (qbot_new + qbot_prev)
+        state.flows[2] += 0.5 * Δt * (qtop_new + qtop_prev)
+    end
     return
 end
+
 
 struct RichardsState <: State
     u::Vector{Float64}

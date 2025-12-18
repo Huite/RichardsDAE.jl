@@ -134,7 +134,7 @@ function timestep!(model::Model, Δt)
     while !converged
         Δt = compute_timestep_size(model.timestepper, Δt, converged, n_iter)
         rewind!(state)
-        set_bdf_coefficients!(bdf, Δt)  # recompute for new Δt
+        set_bdf_coefficients!(state.bdf, Δt)  # recompute for new Δt
         converged, n_iter = nonlinearsolve!(model.solver, model.state, model.parameters, Δt)
     end
     rotate_history!(state.bdf, state.u, Δt)
@@ -146,12 +146,15 @@ end
 function nonlinearsolve!(nonlinearsolver, state, parameters, Δt)
     for i = 1:nonlinearsolver.maxiter
         residual!(nonlinearsolver.linearsolver.rhs, state, parameters, Δt)
+        nonlinearsolver.nresidual += 1
         # Check the residual immediately for convergence.
         if converged(nonlinearsolver, primary(state))
             return true, i
         end
         jacobian!(nonlinearsolver.linearsolver.J, state, parameters, Δt)
         linearsolve!(nonlinearsolver.linearsolver)
+        nonlinearsolver.njacobian += 1
+        nonlinearsolver.nlinsolve += 1
         relaxed_update!(
             nonlinearsolver.relax,
             nonlinearsolver.linearsolver,
