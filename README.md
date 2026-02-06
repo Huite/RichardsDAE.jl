@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/1119142156.svg)](https://doi.org/10.5281/zenodo.18507019)
+
 # RichardsDAE
 
 This repository contains the code associated with the short communication:
