@@ -4,6 +4,7 @@ using DataFrames
 using CSV
 
 function create_celia(formulation, bdf)
+    # This is the original benchmark, with Dirichlet boundaries.
     # Note: units are centimeters and seconds!
     soil = RD.Haverkamp(
         a = 1.611e6,
@@ -22,7 +23,7 @@ function create_celia(formulation, bdf)
         Δz = 1.0,
         Δztotal = 40.0,
         tend = 360.0,
-        dt = 120.0,
+        save_dt = 120.0,
         ψ0 = RD.InitialConstant(-61.5),
         bottomboundary = RD.HeadBoundary(-61.5, soil),
         topboundary = RD.HeadBoundary(-20.5, soil),
@@ -32,6 +33,7 @@ function create_celia(formulation, bdf)
 end
 
 function create_celia_fixedq(formulation, bdf)
+    # This is the adapted benchmark with fixed rates.
     # Note: units are centimeters and seconds!
     soil = RD.Haverkamp(
         a = 1.611e6,
@@ -50,7 +52,7 @@ function create_celia_fixedq(formulation, bdf)
         Δz = 1.0,
         Δztotal = 40.0,
         tend = 360.0,
-        dt = 120.0,
+        save_dt = 120.0,
         ψ0 = RD.InitialConstant(-61.5),
         bottomboundary = nothing,
         topboundary = nothing,
@@ -63,7 +65,7 @@ end
 function run(formulations)
     models = []
     for (formulation, bdf, timestepper) in formulations
-        case = create_celia(formulation, bdf)
+        case = create_celia_fixedq(formulation, bdf)
         # Solver is formulation dependent: DAE Jacobian is larger.
         solver = RD.NewtonSolver(
             RD.LinearSolverLU(case.parameters),
@@ -80,130 +82,52 @@ function run(formulations)
     return models
 end
 
+# Comparison results for pressure head plot.
+
+models = run((
+    (RD.HeadBased(), RD.BDF1(), RD.FixedTimeStepper(120.0)),
+    (RD.ReducedDAE(), RD.BDF1(), RD.FixedTimeStepper(120.0)),
+    (RD.ReducedDAE(), RD.BDF2(), RD.FixedTimeStepper(120.0)),
+    (RD.ReducedDAE(), RD.BDF1(), RD.FixedTimeStepper(1.0)),
+))
+labels = [
+    "ψ-based (Δt=120.0)",
+    "Reduced-BDF1 (Δt=120.0)",
+    "Reduced-BDF2 (Δt=120.0)",
+    "Reduced-BDF1 (Δt=1.0)",
+]
+data = Dict{String,Vector{Float64}}()
+for (label, model) in zip(labels, models)
+    n = 40
+    finalψ = model.saved[1:n, end]
+    data[label] = finalψ
+end
+
+headdf = DataFrame(data)
+CSV.write("cases/output/haverkamp-final-head.csv", headdf)
+
+# Mass conservation diagnostics.
+
 models = run((
     (RD.HeadBased(), RD.BDF1(), RD.FixedTimeStepper(120.0)),
     (RD.MixedDAE(), RD.BDF1(), RD.FixedTimeStepper(120.0)),
     (RD.ReducedDAE(), RD.BDF1(), RD.FixedTimeStepper(120.0)),
     (RD.MixedDAE(), RD.BDF2(), RD.FixedTimeStepper(120.0)),
     (RD.ReducedDAE(), RD.BDF2(), RD.FixedTimeStepper(120.0)),
-    (RD.ReducedDAE(), RD.BDF1(), RD.FixedTimeStepper(1.0)),
 ))
-
-
-const COLORS = RD.okabe_ito_colors()
-
-p = plot(xlabel = "Elevation (cm)", ylabel = "Pressure head (cm)", dpi = 300)
-plot!(p, models[6].saved[:, end], label = "Dense", color = COLORS[:black], lw = 2)
-plot!(p, models[1].saved[:, end], label = "ψ-based", color = COLORS[:dark_orange], lw = 2)
-#plot!(models[2].saved[:, end], label="DAE-BDF1")
-plot!(p, models[3].saved[:, end], label = "Celia-BDF1", color = COLORS[:light_blue], lw = 2)
-#plot!(models[4].saved[:, end], label="DAE-BDF2")
-plot!(p, models[5].saved[:, end], label = "Celia-BDF2", color = COLORS[:green], lw = 2)
-savefig(p, "cases/output/Celia.pdf")
-savefig(p, "cases/output/Celia.png")
-
-labels = [
+labels = (
     "HeadBased-BDF1",
     "MixedDAE-BDF1",
     "ReducedDAE-BDF1",
     "MixedDAE-BDF2",
     "ReducedDAE-BDF2",
-]
+)
 waterbalances = [RD.waterbalance_dataframe(m) for m in models[1:5]];
 
 results = DataFrame(
     model = labels,
-    mass_bias = RD.massbalance_bias.(waterbalances),
+    mass_balance_ratio = RD.massbalance_balance_ratio.(waterbalances),
     mass_rmse = RD.massbalance_rmse.(waterbalances),
 )
-CSV.write("cases/output/celia.csv", results)
+CSV.write("cases/output/haverkamp-mass.csv", results)
 
-
-models[2].solver.njacobian
-models[3].solver.njacobian
-models[2].solver.nresidual
-models[3].solver.nresidual
-models[2].solver.nlinsolve
-models[3].solver.nlinsolve
-
-
-models[4].solver.njacobian
-models[5].solver.njacobian
-models[4].solver.nresidual
-models[5].solver.nresidual
-models[4].solver.nlinsolve
-models[5].solver.nlinsolve
-
-
-p = plot(
-    xlabel = "Residual evaluation #",
-    ylabel = "Maximum residual",
-    yscale = :log10,
-    dpi = 300,
-)
-plot!(p, models[2].solver.maxresidual, label = "DAE-BDF1", lw = 3, color = COLORS[:black])
-plot!(
-    p,
-    models[3].solver.maxresidual,
-    label = "Celia-BDF1",
-    lw = 2,
-    ls = :dash,
-    color = COLORS[:light_blue],
-)
-savefig("BDF1-residual.png")
-p = plot(
-    xlabel = "Residual evaluation #",
-    ylabel = "Maximum residual",
-    yscale = :log10,
-    dpi = 300,
-)
-plot!(p, models[4].solver.maxresidual, label = "DAE-BDF2", lw = 3, color = COLORS[:black])
-plot!(
-    p,
-    models[5].solver.maxresidual,
-    label = "Celia-BDF2",
-    lw = 2,
-    ls = :dash,
-    color = COLORS[:green],
-)
-savefig("BDF2-residual.png")
-
-p = plot(
-    xlabel = "Residual evaluation #",
-    ylabel = "Maximum residual",
-    yscale = :log10,
-    dpi = 300,
-)
-plot!(
-    p,
-    models[2].solver.maxresidual,
-    label = "DAE-BDF1",
-    lw = 2,
-    color = COLORS[:light_blue],
-)
-plot!(
-    p,
-    models[4].solver.maxresidual,
-    label = "DAE-BDF2",
-    lw = 2,
-    color = COLORS[:green],
-    ls = :dash,
-)
-savefig(p, "BDF1-vs-BDF2.png")
-
-
-labels = [
-    "HeadBased-BDF1",
-    "MixedDAE-BDF1",
-    "ReducedDAE-BDF1",
-    "MixedDAE-BDF2",
-    "ReducedDAE-BDF2",
-    "Dense-BDF1",
-]
-solver_stats = DataFrame(
-    model = labels,
-    njacobians = [m.solver.njacobian for m in models[1:6]],
-    nresiduals = [m.solver.nresidual for m in models[1:6]],
-    nlinsolves = [m.solver.nlinsolve for m in models[1:6]],
-)
-CSV.write("cases/output/solverstats.csv", solver_stats)

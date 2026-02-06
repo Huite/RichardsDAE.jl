@@ -2,14 +2,9 @@ function residual!(rhs, state::RichardsState, parameters::HeadBasedParameters, �
     waterbalance!(state.∇q, state.u, parameters)
     Δz = parameters.Δz
     bdf = state.bdf
-    #ψ_old = state.bdf.u_prev[1, :]
     for i = 1:parameters.n
         ψ = state.u[i]
         C = specific_moisture_capacity(ψ, parameters.constitutive[i])
-        #Sa = aqueous_saturation(ψ, parameters.constitutive[i])
-        #Ss = parameters.constitutive[i].Ss
-        #rhs[i] = -(state.∇q[i] - Δz * (C + Sa * Ss) * (ψ - state.u_old[i]) / Δt)
-        #rhs[i] = -(state.∇q[i] - Δz * C * (ψ - ψ_old[i]) / Δt)
 
         ψ_bdf = bdf.a[1] * ψ
         for j = 1:bdf.order
@@ -36,9 +31,6 @@ function jacobian!(J, state, parameters::HeadBasedParameters, Δt)
 
     for i = 1:n
         C = specific_moisture_capacity(ψ[i], constitutive[i])
-        #Sa = aqueous_saturation(ψ[i], constitutive[i])
-        #Ss = constitutive[i].Ss
-        #Cᵢ[i] = -(Δz * (C + Sa * Ss)) / Δt
         Cᵢ[i] = -(Δz * C) * a1
     end
 

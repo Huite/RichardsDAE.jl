@@ -12,7 +12,7 @@ function Case(;
     Δz,
     Δztotal,
     tend,
-    dt,
+    save_dt,
     ψ0,
     bottomboundary,
     topboundary,
@@ -22,7 +22,7 @@ function Case(;
     if isnothing(forcing)
         forcing = MeteorologicalForcing([0.0], [0.0], [0.0])
     end
-    saveat = collect(0.0:dt:tend)
+    saveat = collect(0.0:save_dt:tend)
     return Case(
         RichardsParameters(
             formulation,
@@ -60,10 +60,10 @@ function waterbalance_dataframe(model)
     )
 end
 
-function massbalance_bias(waterbalance)
+function massbalance_balance_ratio(waterbalance)
     ΔS = waterbalance.storage[end] - waterbalance.storage[1]
-    error = waterbalance.qbot[end] + waterbalance.qtop[end] - ΔS
-    return error
+    net_boundary_flux = waterbalance.qbot[end] + waterbalance.qtop[end]
+    return net_boundary_flux / ΔS
 end
 
 function massbalance_rmse(waterbalance)

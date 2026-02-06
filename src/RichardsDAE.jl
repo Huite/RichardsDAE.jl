@@ -27,7 +27,6 @@ include("model.jl")
 
 include("constitutive/haverkamp.jl")
 include("constitutive/mualemvangenuchten.jl")
-include("constitutive/spline.jl")
 
 include("case_helpers.jl")
 

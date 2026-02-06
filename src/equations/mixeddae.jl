@@ -47,16 +47,13 @@ function jacobian!(J, state::RichardsDAEState, parameters::MixedDAEParameters, �
         J[i, n+i] = -Δz * a1
     end
 
-    # bottom blocks: ∂F₂/∂ψ = -C*, ∂F₂/∂θ = I
+    # bottom blocks: ∂F₂/∂ψ = -C, ∂F₂/∂θ = I
     for i = 1:n
         h = parameters.constitutive[i]
         ψi = ψ[i]
         C = specific_moisture_capacity(ψi, h)
-        #Sa = aqueous_saturation(ψi, h)
-        #Ss = h.Ss
 
-        # bottom-left: -C*
-        #J[n+i, i] = -(C + Sa * Ss)
+        # bottom-left: -C
         J[n+i, i] = -C
         # bottom-right: I
         J[n+i, n+i] = 1.0
