@@ -88,12 +88,16 @@ models = run((
     (RD.HeadBased(), RD.BDF1(), RD.FixedTimeStepper(120.0)),
     (RD.ReducedDAE(), RD.BDF1(), RD.FixedTimeStepper(120.0)),
     (RD.ReducedDAE(), RD.BDF2(), RD.FixedTimeStepper(120.0)),
+    (RD.MixedDAE(), RD.BDF1(), RD.FixedTimeStepper(120.0)),
+    (RD.MixedDAE(), RD.BDF2(), RD.FixedTimeStepper(120.0)),
     (RD.ReducedDAE(), RD.BDF1(), RD.FixedTimeStepper(1.0)),
 ))
 labels = [
     "ψ-based (Δt=120.0)",
     "Reduced-BDF1 (Δt=120.0)",
     "Reduced-BDF2 (Δt=120.0)",
+    "Mixed-BDF1 (Δt=120.0)",
+    "Mixed-BDF2 (Δt=120.0)",
     "Reduced-BDF1 (Δt=1.0)",
 ]
 data = Dict{String,Vector{Float64}}()

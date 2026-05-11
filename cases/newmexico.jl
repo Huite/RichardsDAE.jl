@@ -57,54 +57,99 @@ function run(formulations)
     return models
 end
 
+function generate_formulations(scheme, dts)
+    formulations = []
+    for bdf in (RD.BDF1(), RD.BDF2(), RD.BDF3())
+        for dt in dts
+            formulation = (scheme, bdf, RD.FixedTimeStepper(dt))
+            push!(formulations, formulation)
+        end
+    end
+    return formulations
+end
+
 # Run fixed time step benchmarks.
+# Add a reference run with fine time discretization.
 
 dts = 10 .^ collect(-1:-0.5:-4)
-formulations = []
-for bdf in (RD.BDF1(), RD.BDF2(), RD.BDF3())
-    for dt in dts
-        formulation = (RD.ReducedDAE(), bdf, RD.FixedTimeStepper(dt))
-        push!(formulations, formulation)
-    end
-end
-# Add a reference run with fine time discretization.
-push!(formulations, (RD.ReducedDAE(), RD.BDF1(), RD.FixedTimeStepper(1.0e-6)))
-models = run(formulations)
+reduced_formulations = generate_formulations(RD.ReducedDAE(), dts)
+mixed_formulations = generate_formulations(RD.MixedDAE(), dts)
+reduced_models = run(reduced_formulations)
+mixed_models = run(mixed_formulations)
+reference_model = run([(RD.ReducedDAE(), RD.BDF1(), RD.FixedTimeStepper(1.0e-6))])[1]
 
 # Collect the output, store the final heads and create a work-error plot.
 
 data = Dict{String,Vector{Float64}}()
 labels = ("BDF1", "BDF2", "BDF3")
 n = 120
-for (model, (label, dt)) in zip(models, Iterators.product(labels, dts))
+for (model, (label, dt)) in zip(reduced_models, Iterators.product(labels, dts))
     data["Reduced-$(label) (dt=$(dt))"] = model.saved[1:n, end]
 end
-data["Reduced-BDF1 (dt=0.000001)"] = models[end].saved[1:n, end]
+for (model, (label, dt)) in zip(mixed_models, Iterators.product(labels, dts))
+    data["Mixed-$(label) (dt=$(dt))"] = model.saved[1:n, end]
+end
+data["Reduced-BDF1 (dt=0.000001)"] = reference_model.saved[1:n, end]
+
 headdf = DataFrame(data)
 CSV.write("cases/output/newmexico-final-head.csv", headdf)
 
-refmodel = models[end]
-model_rmses = [rmse(model, refmodel) for model in models]
-njac = [model.solver.njacobian for model in models]
-nres = [model.solver.nresidual for model in models]
-nsolve = [model.solver.nlinsolve for model in models]
-model_work = nsolve
+reduced_model_rmses = [rmse(model, reference_model) for model in reduced_models]
+mixed_model_rmses = [rmse(model, reference_model) for model in mixed_models]
 ntimes = length(dts)
 nbdf = 3
-work = reshape(model_work[1:(end-1)], (ntimes, nbdf))
-error = reshape(model_rmses[1:(end-1)], (ntimes, nbdf))
 
 const COLORS = RD.okabe_ito_colors()
 p = plot(
     xaxis = :log10,
-    #    yaxis = :log10,
     ylabel = "RMSE (m)",
-    xlabel = "Work",
+    xlabel = "Δt (d)",
+    xticks = ([0.0001, 0.001, 0.01, 0.1], ["0.0001", "0.001", "0.01", "0.1"]),
 )
-plot!(p, work[:, 1], error[:, 1], label = "", color = COLORS[:dark_orange], lw = 2)
-scatter!(p, work[:, 1], error[:, 1], label = "BDF1", color = COLORS[:dark_orange])
-plot!(p, work[:, 2], error[:, 2], label = "", color = COLORS[:light_blue], lw = 2)
-scatter!(p, work[:, 2], error[:, 2], label = "BDF2", color = COLORS[:light_blue])
-plot!(p, work[:, 3], error[:, 3], label = "", color = COLORS[:green], lw = 2)
-scatter!(p, work[:, 3], error[:, 3], label = "BDF3", color = COLORS[:green])
-savefig(p, "cases/output/newmexico-errorwork.pdf")
+reduced_error = reshape(reduced_model_rmses, (ntimes, nbdf))
+mixed_error = reshape(mixed_model_rmses, (ntimes, nbdf))
+scatter!(
+    p,
+    dts,
+    mixed_error[:, 1],
+    label = "Mixed-BDF1",
+    color = COLORS[:dark_orange],
+    markersize = 5,
+    markerstrokewidth = 0,
+)
+scatter!(
+    p,
+    dts,
+    mixed_error[:, 2],
+    label = "Mixed-BDF2",
+    color = COLORS[:light_blue],
+    markersize = 5,
+    markerstrokewidth = 0,
+)
+scatter!(
+    p,
+    dts,
+    mixed_error[:, 3],
+    label = "Mixed-BDF3",
+    color = COLORS[:green],
+    markersize = 5,
+    markerstrokewidth = 0,
+)
+plot!(
+    p,
+    dts,
+    reduced_error[:, 1],
+    label = "Reduced-BDF1",
+    color = COLORS[:dark_orange],
+    lw = 2,
+)
+plot!(
+    p,
+    dts,
+    reduced_error[:, 2],
+    label = "Reduced-BDF2",
+    color = COLORS[:light_blue],
+    lw = 2,
+)
+plot!(p, dts, reduced_error[:, 3], label = "Reduced-BDF3", color = COLORS[:green], lw = 2)
+savefig(p, "cases/output/newmexico-error-timestep.pdf")
